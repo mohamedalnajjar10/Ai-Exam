@@ -6,6 +6,7 @@ import type { Request } from 'express';
 import type { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenRevocationService } from '../services/token-revocation.service';
+import { DEV_JWT_SECRET } from '../constant/auth-messages';
 import type { JwtPayload } from '../interfaces/auth.interfaces';
 
 @Injectable()
@@ -15,10 +16,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private prisma: PrismaService,
     private tokenRevocationService: TokenRevocationService,
   ) {
+    const secret = config.get<string>('JWT_SECRET') ?? DEV_JWT_SECRET;
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('JWT_SECRET') ?? 'ai-exam-dev-secret',
+      secretOrKey: secret,
       passReqToCallback: true,
     });
   }

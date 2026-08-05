@@ -158,6 +158,11 @@ describe('AuthService', () => {
     };
     fakeRedis = new FakeRedis();
     redisService = {
+      set: jest.fn((key: string, value: string, ttlSeconds?: number) =>
+        fakeRedis.set(key, value, 'EX', ttlSeconds),
+      ),
+      get: jest.fn((key: string) => fakeRedis.get(key)),
+      del: jest.fn((key: string) => fakeRedis.del(key)),
       getClient: jest.fn(() => fakeRedis),
     };
     configService = {

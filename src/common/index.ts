@@ -1,5 +1,6 @@
 export { Public, IS_PUBLIC_KEY } from './decorators/public.decorator';
 export { CurrentUser } from './decorators/current-user.decorator';
+export { AccessToken } from './decorators/access-token.decorator';
 export { Roles, ROLES_KEY } from './decorators/roles.decorator';
 export { Throttle, THROTTLE_METADATA } from './decorators/throttle.decorator';
 export { JwtAuthGuard } from './guards/jwt-auth.guard';

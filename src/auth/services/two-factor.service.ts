@@ -85,12 +85,7 @@ export class TwoFactorService {
       );
     }
 
-    const redis: any = this.redisService.getClient();
-    if (!redis) {
-      throw new UnauthorizedException('Recovery codes are unavailable');
-    }
-
-    const raw = await redis.get(this.recoveryCodesKey(user.id));
+    const raw = await this.redisService.get(this.recoveryCodesKey(user.id));
     const storedHashes: string[] = raw ? JSON.parse(raw) : [];
 
     const normalized = verifyRecoveryCodeDto.recoveryCode
@@ -105,10 +100,9 @@ export class TwoFactorService {
 
     // Recovery codes are single-use: remove the used code and persist the rest
     storedHashes.splice(index, 1);
-    await redis.set(
+    await this.redisService.set(
       this.recoveryCodesKey(user.id),
       JSON.stringify(storedHashes),
-      'EX',
       RECOVERY_CODE_TTL_SECONDS,
     );
 
@@ -243,24 +237,17 @@ export class TwoFactorService {
       this.tokenService.hashToken(code.replace('-', '').toUpperCase()),
     );
 
-    const redis: any = this.redisService.getClient();
-    if (redis) {
-      await redis.set(
-        this.recoveryCodesKey(userId),
-        JSON.stringify(hashed),
-        'EX',
-        RECOVERY_CODE_TTL_SECONDS,
-      );
-    }
+    await this.redisService.set(
+      this.recoveryCodesKey(userId),
+      JSON.stringify(hashed),
+      RECOVERY_CODE_TTL_SECONDS,
+    );
 
     return codes;
   }
 
   private async clearRecoveryCodes(userId: string): Promise<void> {
-    const redis: any = this.redisService.getClient();
-    if (redis) {
-      await redis.del(this.recoveryCodesKey(userId));
-    }
+    await this.redisService.del(this.recoveryCodesKey(userId));
   }
 
   private recoveryCodesKey(userId: string): string {

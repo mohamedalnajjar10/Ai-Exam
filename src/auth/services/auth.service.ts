@@ -107,10 +107,7 @@ export class AuthService {
     });
 
     await this.tokenService.revokeToken(token);
-    const redis: any = this.redisService.getClient();
-    if (redis) {
-      await redis.del(this.emailVerificationKey(user.id));
-    }
+    await this.redisService.del(this.emailVerificationKey(user.id));
 
     return { message: 'Your email has been verified successfully' };
   }
@@ -265,9 +262,8 @@ export class AuthService {
       );
     }
     // The link is only valid if it was the most recently issued one
-    const redis: any = this.redisService.getClient();
-    if (payload.prn && redis) {
-      const storedNonce = await redis.get(
+    if (payload.prn) {
+      const storedNonce = await this.redisService.get(
         this.emailVerificationKey(payload.sub),
       );
       if (storedNonce !== payload.prn) {
@@ -288,15 +284,11 @@ export class AuthService {
     email: string,
   ): Promise<void> {
     const nonce = randomUUID();
-    const redis: any = this.redisService.getClient();
-    if (redis) {
-      await redis.set(
-        this.emailVerificationKey(userId),
-        nonce,
-        'EX',
-        EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
-      );
-    }
+    await this.redisService.set(
+      this.emailVerificationKey(userId),
+      nonce,
+      EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
+    );
 
     const verifyToken = await this.tokenService.signEmailVerificationToken(
       userId,

@@ -7,6 +7,27 @@ import {
 import { BranchName, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * Maps a Prisma P2025 error (record not found on update) to a business
+ * exception based on the user's current state.
+ */
+function throwIfNotfound(
+  error: unknown,
+  user: { branchId: string | null } | null,
+  selectMessage: string,
+  changeMessage: string,
+): never {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2025'
+  ) {
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.branchId) throw new BadRequestException(selectMessage);
+    throw new BadRequestException(changeMessage);
+  }
+  throw error;
+}
+
 @Injectable()
 export class BranchService {
   constructor(private prisma: PrismaService) {}
@@ -64,19 +85,13 @@ export class BranchService {
         },
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-        });
-        if (!user) throw new NotFoundException('User not found');
-        throw new BadRequestException(
-          'Branch already selected. Use change endpoint instead.',
-        );
-      }
-      throw error;
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      throwIfNotfound(
+        error,
+        user,
+        'Branch already selected. Use change endpoint instead.',
+        'Branch already selected. Use change endpoint instead.',
+      );
     }
   }
 
@@ -97,22 +112,13 @@ export class BranchService {
         },
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-        });
-        if (!user) throw new NotFoundException('User not found');
-        if (!user.branchId) {
-          throw new BadRequestException(
-            'No branch selected. Use select endpoint instead.',
-          );
-        }
-        throw new BadRequestException('Already assigned to this branch');
-      }
-      throw error;
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      throwIfNotfound(
+        error,
+        user,
+        'No branch selected. Use select endpoint instead.',
+        'Already assigned to this branch',
+      );
     }
   }
 }

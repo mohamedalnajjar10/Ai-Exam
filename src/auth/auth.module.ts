@@ -12,6 +12,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { ThrottleGuard } from '../common/guards/throttle.guard';
+import { DEV_JWT_SECRET } from './constant/auth-messages';
 
 @Module({
   imports: [
@@ -22,12 +23,17 @@ import { ThrottleGuard } from '../common/guards/throttle.guard';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const secret = configService.get<string>('JWT_SECRET');
-        if (configService.get<string>('NODE_ENV') === 'production' && !secret) {
+        const nodeEnv = configService.get<string>('NODE_ENV');
+        if (
+          nodeEnv === 'production' &&
+          (!secret || secret === DEV_JWT_SECRET)
+        ) {
           throw new Error(
-            'JWT_SECRET must be set in the environment when NODE_ENV=production',
+            'JWT_SECRET must be set to a secure value in production. ' +
+              'The default dev secret is not allowed when NODE_ENV=production.',
           );
         }
-        return { secret: secret ?? 'ai-exam-dev-secret' };
+        return { secret: secret ?? DEV_JWT_SECRET };
       },
     }),
   ],

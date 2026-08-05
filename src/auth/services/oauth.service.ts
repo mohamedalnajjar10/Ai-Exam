@@ -39,15 +39,11 @@ export class OAuthService {
   async getGoogleOAuthUrl(): Promise<string> {
     const config = this.getGoogleConfig();
     const state = randomUUID();
-    const redis: any = this.redisService.getClient();
-    if (redis) {
-      await redis.set(
-        `oauth-state:${state}`,
-        'google',
-        'EX',
-        OAUTH_STATE_TTL_SECONDS,
-      );
-    }
+    await this.redisService.set(
+      `oauth-state:${state}`,
+      'google',
+      OAUTH_STATE_TTL_SECONDS,
+    );
 
     const params = new URLSearchParams({
       client_id: config.clientId,
@@ -89,17 +85,13 @@ export class OAuthService {
   }
 
   private async consumeOAuthState(state: string): Promise<void> {
-    const redis: any = this.redisService.getClient();
-    if (!redis) {
-      throw new UnauthorizedException('OAuth state verification unavailable');
-    }
-    const stored = await redis.get(`oauth-state:${state}`);
+    const stored = await this.redisService.get(`oauth-state:${state}`);
     if (!stored) {
       throw new UnauthorizedException(
         'Invalid OAuth state. Please start the login again.',
       );
     }
-    await redis.del(`oauth-state:${state}`);
+    await this.redisService.del(`oauth-state:${state}`);
   }
 
   private async exchangeGoogleCode(

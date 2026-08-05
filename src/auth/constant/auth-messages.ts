@@ -31,3 +31,9 @@ export const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
   'ai-exam-timing-equalizer',
   BCRYPT_SALT_ROUNDS,
 );
+
+/**
+ * Fallback JWT secret used only in development/test environments.
+ * Must NOT be used in production — a startup check enforces this.
+ */
+export const DEV_JWT_SECRET = 'ai-exam-dev-secret';

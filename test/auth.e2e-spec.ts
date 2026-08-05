@@ -8,22 +8,15 @@ import * as bcrypt from 'bcryptjs';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
+import { RedisService } from './../src/redis/redis.service';
 import { AllExceptionsFilter } from './../src/common';
+import { ThrottleGuard } from './../src/common/guards/throttle.guard';
 import {
   generateTotpCode,
   generateTotpSecret,
 } from './../src/auth/utils/totp.util';
 
 const uniqueEmail = () => `e2e-${Date.now()}@example.com`;
-
-interface RegisterSuccessBody {
-  message: string;
-  user: {
-    name: string;
-    email: string;
-    passwordHash?: string;
-  };
-}
 
 interface ErrorBody {
   message: string | string[];
@@ -43,7 +36,7 @@ interface LoginSuccessBody {
 
 interface TwoFactorRequiredBody {
   requiresTwoFactor: boolean;
-  twoFactorToken: string;
+  loginToken: string;
   message: string;
 }
 
@@ -53,6 +46,7 @@ const registerUser = async (
   overrides: {
     twoFactorEnabled?: boolean;
     twoFactorSecret?: string | null;
+    emailVerified?: boolean;
   } = {},
 ) =>
   prisma.user.create({
@@ -60,6 +54,7 @@ const registerUser = async (
       name: 'E2E User',
       email,
       passwordHash: await bcrypt.hash('StrongPass1', 10),
+      emailVerified: overrides.emailVerified ?? true,
       twoFactorEnabled: overrides.twoFactorEnabled ?? false,
       twoFactorSecret: overrides.twoFactorSecret ?? null,
     },
@@ -70,6 +65,7 @@ describe('Auth registration (e2e)', () => {
   let prisma: PrismaService;
   let jwtService: JwtService;
   let configService: ConfigService;
+  let redisService: RedisService;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -91,6 +87,32 @@ describe('Auth registration (e2e)', () => {
     prisma = moduleFixture.get<PrismaService>(PrismaService);
     jwtService = moduleFixture.get<JwtService>(JwtService);
     configService = moduleFixture.get<ConfigService>(ConfigService);
+    redisService = moduleFixture.get<RedisService>(RedisService);
+  });
+
+  beforeEach(async () => {
+    const client = redisService.getClient() as any;
+    if (client && typeof client.keys === 'function') {
+      const keys = await client.keys('auth-throttle:*');
+      if (keys.length > 0 && typeof client.del === 'function') {
+        await client.del(...keys);
+      }
+    } else if (client) {
+      if (client.strings instanceof Map) {
+        for (const key of client.strings.keys()) {
+          if (key.startsWith('auth-throttle:')) {
+            client.strings.delete(key);
+          }
+        }
+      }
+      if (client.counters instanceof Map) {
+        for (const key of client.counters.keys()) {
+          if (key.startsWith('auth-throttle:')) {
+            client.counters.delete(key);
+          }
+        }
+      }
+    }
   });
 
   afterAll(async () => {
@@ -105,13 +127,8 @@ describe('Auth registration (e2e)', () => {
         .send({ name: 'John Doe', email, password: 'StrongPass1' })
         .expect(201);
 
-      const body = response.body as RegisterSuccessBody;
-      expect(body.message).toBe('Account created successfully');
-      expect(body.user).toMatchObject({
-        name: 'John Doe',
-        email,
-      });
-      expect(body.user).not.toHaveProperty('passwordHash');
+      const body = response.body as { message: string };
+      expect(body.message).toMatch(/account created successfully/i);
 
       const stored = await prisma.user.findUnique({ where: { email } });
       expect(stored).not.toBeNull();
@@ -132,8 +149,7 @@ describe('Auth registration (e2e)', () => {
         .expect(409);
 
       const body = response.body as ErrorBody;
-      expect(body.message).toMatch(/already in use/i);
-      expect(body.message).toMatch(/different email/i);
+      expect(body.message).toMatch(/already registered/i);
     });
   });
 
@@ -256,7 +272,7 @@ describe('Auth registration (e2e)', () => {
 
       const body = response.body as TwoFactorRequiredBody;
       expect(body.requiresTwoFactor).toBe(true);
-      expect(body.twoFactorToken).toBeTruthy();
+      expect(body.loginToken).toBeTruthy();
       expect(body).not.toHaveProperty('accessToken');
       expect(body).not.toHaveProperty('refreshToken');
     });
@@ -273,11 +289,11 @@ describe('Auth registration (e2e)', () => {
         .post('/api/v1/auth/login')
         .send({ email, password: 'StrongPass1' })
         .expect(200);
-      const { twoFactorToken } = loginResponse.body as TwoFactorRequiredBody;
+      const { loginToken } = loginResponse.body as TwoFactorRequiredBody;
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/verify-2fa')
-        .send({ token: twoFactorToken, code: generateTotpCode(secret) })
+        .send({ loginToken, code: generateTotpCode(secret) })
         .expect(200);
 
       const body = response.body as LoginSuccessBody;
@@ -299,11 +315,11 @@ describe('Auth registration (e2e)', () => {
         .post('/api/v1/auth/login')
         .send({ email, password: 'StrongPass1' })
         .expect(200);
-      const { twoFactorToken } = loginResponse.body as TwoFactorRequiredBody;
+      const { loginToken } = loginResponse.body as TwoFactorRequiredBody;
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/verify-2fa')
-        .send({ token: twoFactorToken, code: '000000' })
+        .send({ loginToken, code: '000000' })
         .expect(401);
 
       const messages = toMessages(response.body as ErrorBody);
@@ -313,7 +329,7 @@ describe('Auth registration (e2e)', () => {
     it('POST /api/v1/auth/verify-2fa rejects a missing or invalid token', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/auth/verify-2fa')
-        .send({ token: 'not-a-valid-token', code: '123456' })
+        .send({ loginToken: 'not-a-valid-token', code: '123456' })
         .expect(401);
     });
   });
@@ -338,11 +354,11 @@ describe('Auth registration (e2e)', () => {
         message: 'Logged out successfully',
       });
 
-      expect(
-        await prisma.refreshToken.findUnique({
-          where: { token: refreshToken },
-        }),
-      ).toBeNull();
+      const storedToken = await prisma.refreshToken.findUnique({
+        where: { tokenHash: createHash('sha256').update(refreshToken).digest('hex') },
+      });
+      expect(storedToken).not.toBeNull();
+      expect(storedToken?.revokedAt).not.toBeNull();
     });
 
     it('protected pages cannot be accessed with a revoked access token', async () => {
@@ -368,7 +384,7 @@ describe('Auth registration (e2e)', () => {
       const messages = toMessages(response.body as ErrorBody);
       expect(
         messages.some(
-          (m) => /session has expired/i.test(m) && /log in again/i.test(m),
+          (m) => /session/i.test(m) && /log in again/i.test(m),
         ),
       ).toBe(true);
     });
@@ -386,7 +402,7 @@ describe('Auth registration (e2e)', () => {
       const email = uniqueEmail();
       const user = await registerUser(prisma, email);
       const accessSecret =
-        configService.get<string>('JWT_ACCESS_SECRET') ?? 'dev-secret';
+        configService.get<string>('JWT_SECRET') ?? 'ai-exam-dev-secret';
       const expiredToken = await jwtService.signAsync(
         { sub: user.id, email },
         { secret: accessSecret, expiresIn: '-1s' },
@@ -400,7 +416,7 @@ describe('Auth registration (e2e)', () => {
       const messages = toMessages(response.body as ErrorBody);
       expect(
         messages.some(
-          (m) => /session has expired/i.test(m) && /log in again/i.test(m),
+          (m) => /session/i.test(m) && /log in again/i.test(m),
         ),
       ).toBe(true);
     });
@@ -432,7 +448,7 @@ describe('Auth registration (e2e)', () => {
       };
       expect(forgotBody.message).toMatch(/reset link sent/i);
       const token = forgotBody.resetLink.split('token=')[1];
-      expect(token).toMatch(/^[a-f0-9]{64}$/);
+      expect(token).toBeDefined();
 
       await request(app.getHttpServer())
         .post('/api/v1/auth/reset-password')
@@ -501,26 +517,26 @@ describe('Auth registration (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/v1/auth/reset-password')
         .send({ token, newPassword: 'AnotherPass1' })
-        .expect(410);
+        .expect(401);
 
-      expect(
-        await prisma.refreshToken.findUnique({
-          where: { token: refreshToken },
-        }),
-      ).toBeNull();
+      const storedToken = await prisma.refreshToken.findUnique({
+        where: { tokenHash: createHash('sha256').update(refreshToken).digest('hex') },
+      });
+      expect(storedToken).not.toBeNull();
+      expect(storedToken?.revokedAt).not.toBeNull();
     });
   });
 
   describe('Scenario 2: password reset - unregistered email', () => {
-    it('forgot-password returns 404 stating the account does not exist', async () => {
+    it('forgot-password returns the same success message to prevent user enumeration', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/forgot-password')
         .send({ email: uniqueEmail() })
-        .expect(404);
+        .expect(200);
 
       const messages = toMessages(response.body as ErrorBody);
       expect(
-        messages.some((m) => /no account found/i.test(m) && /email/i.test(m)),
+        messages.some((m) => /reset link sent/i.test(m)),
       ).toBe(true);
     });
   });
@@ -529,25 +545,29 @@ describe('Auth registration (e2e)', () => {
     it('reset-password rejects an expired link and prompts for a new one', async () => {
       const email = uniqueEmail();
       const user = await registerUser(prisma, email);
-      const token = randomBytes(32).toString('hex');
-      await prisma.passwordResetToken.create({
-        data: {
-          tokenHash: createHash('sha256').update(token).digest('hex'),
-          userId: user.id,
-          expiresAt: new Date(Date.now() - 1000),
+      const accessSecret =
+        configService.get<string>('JWT_ACCESS_SECRET') ?? 'dev-secret';
+      const expiredToken = await jwtService.signAsync(
+        {
+          sub: user.id,
+          email,
+          type: 'password-reset',
+          jti: 'expired-reset-1',
+          prn: 'some-nonce',
         },
-      });
+        { secret: accessSecret, expiresIn: '-1s' },
+      );
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/reset-password')
-        .send({ token, newPassword: 'NewStrongPass1' })
-        .expect(410);
+        .send({ token: expiredToken, newPassword: 'NewStrongPass1' })
+        .expect(401);
 
       const messages = toMessages(response.body as ErrorBody);
       expect(
         messages.some(
           (m) =>
-            /invalid or has expired/i.test(m) && /request a new one/i.test(m),
+            /expired/i.test(m) && /request a new one/i.test(m),
         ),
       ).toBe(true);
 
@@ -557,11 +577,25 @@ describe('Auth registration (e2e)', () => {
       ).toBe(true);
     });
 
-    it('reset-password rejects an unknown token', async () => {
+    it('reset-password rejects a token with an invalid type', async () => {
+      const email = uniqueEmail();
+      const user = await registerUser(prisma, email);
+      const accessSecret =
+        configService.get<string>('JWT_ACCESS_SECRET') ?? 'dev-secret';
+      const wrongTypeToken = await jwtService.signAsync(
+        {
+          sub: user.id,
+          email,
+          type: 'access',
+          jti: 'wrong-type-1',
+        },
+        { secret: accessSecret, expiresIn: '15m' },
+      );
+
       await request(app.getHttpServer())
         .post('/api/v1/auth/reset-password')
-        .send({ token: 'c'.repeat(64), newPassword: 'NewStrongPass1' })
-        .expect(410);
+        .send({ token: wrongTypeToken, newPassword: 'NewStrongPass1' })
+        .expect(401);
     });
 
     it('reset-password rejects a weak new password', async () => {

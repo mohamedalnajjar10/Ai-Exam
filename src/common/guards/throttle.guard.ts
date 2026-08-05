@@ -63,17 +63,12 @@ export class ThrottleGuard implements CanActivate {
     limit: number,
     windowMs: number,
   ): Promise<boolean> {
-    const client: any = this.redisService.getClient();
-    if (client) {
+    try {
       const ttlSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-      const value = await client.get(key);
-      const count = value ? Number(value) : 0;
-
-      if (count >= limit) {
-        return false;
-      }
-      await client.set(key, String(count + 1), 'EX', ttlSeconds);
-      return true;
+      const count = await this.redisService.incrWithExpiry(key, ttlSeconds);
+      return count <= limit;
+    } catch {
+      // Redis unavailable — fall back to in-memory
     }
 
     // In-memory fallback (single instance / before Redis init)

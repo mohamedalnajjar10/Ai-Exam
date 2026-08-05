@@ -184,9 +184,9 @@ describe('AuthController', () => {
       const result = { message: 'Logged out successfully' };
       mockAuthService.logout.mockResolvedValue(result);
 
-      await expect(
-        controller.logout(requestWithToken('access-token')),
-      ).resolves.toEqual(result);
+      const req = requestWithToken('access-token');
+      const token = req.headers.authorization?.split(' ')[1] ?? '';
+      await expect(controller.logout(token)).resolves.toEqual(result);
       expect(mockAuthService.logout).toHaveBeenCalledWith('access-token');
     });
 
@@ -195,9 +195,7 @@ describe('AuthController', () => {
         message: 'Logged out successfully',
       });
 
-      await controller.logout({
-        headers: {},
-      } as unknown as Request);
+      await controller.logout('');
 
       expect(mockAuthService.logout).toHaveBeenCalledWith('');
     });
@@ -349,7 +347,7 @@ describe('AuthController', () => {
         'state-1',
       );
       expect(res.redirect).toHaveBeenCalledWith(
-        expect.stringContaining('/oauth/callback?access_token=access-token'),
+        expect.stringContaining('/oauth/callback#access_token=access-token'),
       );
     });
 

@@ -3,38 +3,36 @@ import { RedisService } from '../redis/redis.service';
 
 describe('TokenRevocationService', () => {
   let service: TokenRevocationService;
-  let client: any;
+  let store: Map<string, { value: string; expiresAt: number }>;
 
-  const createClient = () => {
-    const strings = new Map<string, { value: string; expiresAt: number }>();
+  const createRedisMock = () => {
+    store = new Map();
     return {
-      async set(key: string, value: string, mode?: 'EX', ttlSeconds?: number) {
-        const expiresAt =
-          mode === 'EX' && ttlSeconds ? Date.now() + ttlSeconds * 1000 : 0;
-        strings.set(key, { value, expiresAt });
-        return 'OK';
+      async set(key: string, value: string, ttlSeconds?: number) {
+        const expiresAt = ttlSeconds ? Date.now() + ttlSeconds * 1000 : 0;
+        store.set(key, { value, expiresAt });
       },
       async get(key: string) {
-        const entry = strings.get(key);
+        const entry = store.get(key);
         if (!entry) return null;
         if (entry.expiresAt && Date.now() > entry.expiresAt) {
-          strings.delete(key);
+          store.delete(key);
           return null;
         }
         return entry.value;
       },
       async del(key: string) {
-        return strings.delete(key) ? 1 : 0;
+        return store.delete(key) ? 1 : 0;
       },
-      getKeys: () => [...strings.keys()],
+      getKeys: () => [...store.keys()],
     };
   };
 
   beforeEach(() => {
-    client = createClient();
-    service = new TokenRevocationService({
-      getClient: () => client,
-    } as unknown as RedisService);
+    const redisMock = createRedisMock();
+    service = new TokenRevocationService(
+      redisMock as unknown as RedisService,
+    );
   });
 
   it('marks a token as revoked', async () => {
@@ -50,14 +48,15 @@ describe('TokenRevocationService', () => {
   it('hashes the token before storing it (never stores raw tokens)', async () => {
     await service.revoke('raw-token-value', 3600);
 
-    const [key] = client.getKeys();
+    const [key] = [...store.keys()];
     expect(key).not.toContain('raw-token-value');
     expect(key).toMatch(/^revoked-token:/);
   });
 
   it('degrades gracefully when no Redis client is available', async () => {
     const withoutRedis = new TokenRevocationService({
-      getClient: () => undefined,
+      set: undefined,
+      get: undefined,
     } as unknown as RedisService);
 
     await expect(withoutRedis.revoke('token', 3600)).resolves.toBeUndefined();

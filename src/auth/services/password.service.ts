@@ -46,15 +46,11 @@ export class PasswordService {
     if (user) {
       // Issue a fresh nonce that invalidates any previously sent reset links
       const nonce = randomUUID();
-      const redis: any = this.redisService.getClient();
-      if (redis) {
-        await redis.set(
-          `password-reset:${user.id}`,
-          nonce,
-          'EX',
-          PASSWORD_RESET_TOKEN_TTL_SECONDS,
-        );
-      }
+      await this.redisService.set(
+        `password-reset:${user.id}`,
+        nonce,
+        PASSWORD_RESET_TOKEN_TTL_SECONDS,
+      );
 
       const resetToken = await this.tokenService.signPasswordResetToken(
         user.id,
@@ -66,6 +62,8 @@ export class PasswordService {
       )}/api/v1/auth/reset-password?token=${resetToken}`;
 
       await this.mailService.sendPasswordResetEmail(user.email, resetLink);
+
+      return { message: 'Password reset link sent to your email', resetLink };
     } else {
       // Equalize response timing so the response does not reveal
       // whether the email is registered
@@ -112,10 +110,7 @@ export class PasswordService {
     // Invalidate all existing sessions after a password change
     await this.tokenService.revokeAllRefreshTokens(user.id);
 
-    const redis: any = this.redisService.getClient();
-    if (redis) {
-      await redis.del(`password-reset:${user.id}`);
-    }
+    await this.redisService.del(`password-reset:${user.id}`);
 
     await this.tokenService.revokeToken(resetPasswordDto.token);
 
@@ -144,9 +139,10 @@ export class PasswordService {
       );
     }
     // The link is only valid if it was the most recently issued one
-    const redis: any = this.redisService.getClient();
-    if (payload.prn && redis) {
-      const storedNonce = await redis.get(`password-reset:${payload.sub}`);
+    if (payload.prn) {
+      const storedNonce = await this.redisService.get(
+        `password-reset:${payload.sub}`,
+      );
       if (storedNonce !== payload.prn) {
         throw new UnauthorizedException(
           'This reset link is no longer valid. Please request a new one.',

@@ -3,14 +3,13 @@ import {
   Post,
   Get,
   Body,
-  Req,
   Query,
   Res,
   HttpCode,
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
-import type { Response, Request } from 'express';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -31,7 +30,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ThrottleGuard } from '../common/guards/throttle.guard';
 import { Throttle } from '../common/decorators/throttle.decorator';
-import { CurrentUser, Public } from '../common';
+import { CurrentUser, Public, AccessToken } from '../common';
 import { resetPasswordPage, verificationResultPage } from './utils/pages';
 import { getFrontendUrl } from './utils/app-urls.util';
 
@@ -201,9 +200,8 @@ export class AuthController {
     description: 'Not authenticated or session expired',
   })
   @HttpCode(HttpStatus.OK)
-  logout(@Req() request: Request) {
-    const accessToken = request.headers.authorization?.replace('Bearer ', '');
-    return this.authService.logout(accessToken ?? '');
+  logout(@AccessToken() token: string) {
+    return this.authService.logout(token ?? '');
   }
 
   /**
@@ -400,25 +398,31 @@ export class AuthController {
         code,
         state,
       );
-      const params = new URLSearchParams();
+      const base = `${getFrontendUrl()}/oauth/callback`;
       if ((result as any).requiresTwoFactor) {
-        params.set('requires_two_factor', 'true');
-        params.set('login_token', (result as any).loginToken);
+        const fragment = new URLSearchParams({
+          requires_two_factor: 'true',
+          login_token: (result as any).loginToken,
+        }).toString();
+        res.redirect(`${base}#${fragment}`);
       } else {
-        params.set('access_token', (result as any).accessToken);
-        params.set('refresh_token', (result as any).refreshToken);
-        params.set('user', JSON.stringify((result as any).user));
+        const fragment = new URLSearchParams({
+          access_token: (result as any).accessToken,
+          refresh_token: (result as any).refreshToken,
+          user: JSON.stringify((result as any).user),
+        }).toString();
+        res.redirect(`${base}#${fragment}`);
       }
-      res.redirect(`${getFrontendUrl()}/oauth/callback?${params.toString()}`);
     } catch (error: any) {
       res.redirect(this.oauthErrorRedirect(error?.message));
     }
   }
 
   private oauthErrorRedirect(message: string): string {
-    const params = new URLSearchParams({
-      error: message ?? 'OAuth login failed',
-    });
+    const sanitized = String(message ?? 'OAuth login failed')
+      .replace(/[^\w\s.,!?-]/g, '')
+      .slice(0, 200);
+    const params = new URLSearchParams({ error: sanitized });
     return `${getFrontendUrl()}/oauth/callback?${params.toString()}`;
   }
 }

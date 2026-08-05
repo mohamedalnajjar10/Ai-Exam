@@ -12,15 +12,13 @@ export class TokenRevocationService {
 
   async revoke(token: string, ttlSeconds: number): Promise<void> {
     if (ttlSeconds <= 0) return;
-    const redis: any = this.redisService.getClient();
-    if (!redis) return;
-    await redis.set(this.key(token), '1', 'EX', ttlSeconds);
+    if (!this.redisService?.set) return;
+    await this.redisService.set(this.key(token), '1', ttlSeconds);
   }
 
   async isRevoked(token: string): Promise<boolean> {
-    const redis: any = this.redisService.getClient();
-    if (!redis) return false;
-    const value = await redis.get(this.key(token));
+    if (!this.redisService?.get) return false;
+    const value = await this.redisService.get(this.key(token));
     return value !== null && value !== undefined;
   }
 
