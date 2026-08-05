@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BranchName {
+  Scientific
+  Literary
+  Industrial
+  Sharia
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id               String       @id @default(cuid())
+  email            String       @unique
+  passwordHash     String?
+  name             String?
+  role             Role         @default(STUDENT)
+  googleId         String?      @unique
+  avatar           String?
+  branchId         String?
+  branch           Branch?      @relation(fields: [branchId], references: [id])
+  twoFactorEnabled Boolean                  @default(false)
+  twoFactorSecret  String?
+  emailVerified    Boolean                  @default(false) // Whether the email address was verified via the emailed link
+  oauthProvider    String?                  // OAuth provider used to create/link this account (e.g. "google")
+  oauthProviderId  String?                  // Unique user ID from the OAuth provider
+  refreshTokens    RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+}
+
+// Model for storing server-side refresh tokens (hash only, never the raw token)
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    // ID of the user this refresh token belongs to
+  tokenHash String    @unique // SHA-256 hash of the refresh token (raw token is never stored)
+  expiresAt DateTime  // When the refresh token expires
+  revokedAt DateTime? // When the token was revoked/rotated (null = still valid)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Index for faster lookups by user
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Branch {
+  id        String    @id @default(cuid())
+  name      BranchName @unique
+  subjects  Subject[]
+  users     User[]
+  createdAt DateTime  @default(now())
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([name, branchId])
+}
