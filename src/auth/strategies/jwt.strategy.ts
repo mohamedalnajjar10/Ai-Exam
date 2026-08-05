@@ -5,7 +5,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import type { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TokenRevocationService } from '../token-revocation.service';
+import { TokenRevocationService } from '../services/token-revocation.service';
 import type { JwtPayload } from '../interfaces/auth.interfaces';
 
 @Injectable()

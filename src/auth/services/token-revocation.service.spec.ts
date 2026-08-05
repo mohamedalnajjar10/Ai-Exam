@@ -54,4 +54,13 @@ describe('TokenRevocationService', () => {
     expect(key).not.toContain('raw-token-value');
     expect(key).toMatch(/^revoked-token:/);
   });
+
+  it('degrades gracefully when no Redis client is available', async () => {
+    const withoutRedis = new TokenRevocationService({
+      getClient: () => undefined,
+    } as unknown as RedisService);
+
+    await expect(withoutRedis.revoke('token', 3600)).resolves.toBeUndefined();
+    await expect(withoutRedis.isRevoked('token')).resolves.toBe(false);
+  });
 });

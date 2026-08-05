@@ -1,4 +1,9 @@
-import { BadRequestException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpStatus,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
@@ -48,10 +53,17 @@ describe('AllExceptionsFilter', () => {
   let filter: ExceptionFilter;
   let response: { status: jest.Mock; json: jest.Mock };
   let host: ArgumentsHost;
+  let errorSpy: jest.SpyInstance;
+  let warnSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     const mock = createMockHttp();
     filter = mock.filter;
     response = mock.response;
@@ -83,6 +95,35 @@ describe('AllExceptionsFilter', () => {
 
       expect(response.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
       expect(getJsonBody(response).message).toEqual(errors);
+    });
+  });
+
+  describe('logging', () => {
+    it('should log client errors (4xx) as warnings without a stack', () => {
+      filter.catch(new BadRequestException('bad input'), host);
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('400'));
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('should log server errors (5xx) as errors with a stack', () => {
+      filter.catch(new Error('boom'), host);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('500'),
+        expect.stringContaining('Error: boom'),
+      );
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('should log internal server errors thrown as HttpExceptions as errors', () => {
+      filter.catch(new InternalServerErrorException('boom'), host);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('500'),
+        expect.any(String),
+      );
+      expect(warnSpy).not.toHaveBeenCalled();
     });
   });
 

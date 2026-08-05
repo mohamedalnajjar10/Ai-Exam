@@ -1,8 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
 
 const mockAuthService = {
   register: jest.fn(),
@@ -21,13 +20,6 @@ const mockAuthService = {
   resetPassword: jest.fn(),
   getGoogleOAuthUrl: jest.fn(),
   handleGoogleOAuthCallback: jest.fn(),
-};
-
-const mockConfigService = {
-  get: jest.fn((key: string) => {
-    if (key === 'FRONTEND_URL') return 'http://localhost:3000';
-    return undefined;
-  }),
 };
 
 const requestWithToken = (token = 'access-token') =>
@@ -59,10 +51,7 @@ describe('AuthController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    controller = new AuthController(
-      mockAuthService as unknown as AuthService,
-      mockConfigService as unknown as ConfigService,
-    );
+    controller = new AuthController(mockAuthService as unknown as AuthService);
   });
 
   it('should be defined', () => {

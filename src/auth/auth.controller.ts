@@ -11,7 +11,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response, Request } from 'express';
-import { ConfigService } from '@nestjs/config';
 import {
   ApiTags,
   ApiOperation,
@@ -19,7 +18,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import type { User } from '@prisma/client';
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -33,7 +32,8 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ThrottleGuard } from '../common/guards/throttle.guard';
 import { Throttle } from '../common/decorators/throttle.decorator';
 import { CurrentUser, Public } from '../common';
-import { resetPasswordPage, verificationResultPage } from './pages';
+import { resetPasswordPage, verificationResultPage } from './utils/pages';
+import { getFrontendUrl } from './utils/app-urls.util';
 
 /**
  * Controller for user account management and authentication
@@ -41,10 +41,7 @@ import { resetPasswordPage, verificationResultPage } from './pages';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   /**
    * Creates a new user account with email and password
@@ -412,9 +409,7 @@ export class AuthController {
         params.set('refresh_token', (result as any).refreshToken);
         params.set('user', JSON.stringify((result as any).user));
       }
-      res.redirect(
-        `${this.getFrontendUrl()}/oauth/callback?${params.toString()}`,
-      );
+      res.redirect(`${getFrontendUrl()}/oauth/callback?${params.toString()}`);
     } catch (error: any) {
       res.redirect(this.oauthErrorRedirect(error?.message));
     }
@@ -424,12 +419,6 @@ export class AuthController {
     const params = new URLSearchParams({
       error: message ?? 'OAuth login failed',
     });
-    return `${this.getFrontendUrl()}/oauth/callback?${params.toString()}`;
-  }
-
-  private getFrontendUrl(): string {
-    return (
-      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3000'
-    );
+    return `${getFrontendUrl()}/oauth/callback?${params.toString()}`;
   }
 }

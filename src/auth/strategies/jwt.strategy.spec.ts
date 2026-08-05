@@ -4,7 +4,7 @@ import type { User } from '@prisma/client';
 import { Role } from '@prisma/client';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TokenRevocationService } from '../token-revocation.service';
+import { TokenRevocationService } from '../services/token-revocation.service';
 
 const mockPrismaService = {
   user: {

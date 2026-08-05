@@ -9,7 +9,10 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { AllExceptionsFilter } from './../src/common';
-import { generateTotpCode, generateTotpSecret } from './../src/auth/totp.util';
+import {
+  generateTotpCode,
+  generateTotpSecret,
+} from './../src/auth/utils/totp.util';
 
 const uniqueEmail = () => `e2e-${Date.now()}@example.com`;
 

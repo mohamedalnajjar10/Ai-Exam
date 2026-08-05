@@ -10,12 +10,16 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
+import { TokenService } from './services/token.service';
+import { TwoFactorService } from './services/two-factor.service';
+import { OAuthService } from './services/oauth.service';
+import { PasswordService } from './services/password.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TokenRevocationService } from './token-revocation.service';
+import { TokenRevocationService } from './services/token-revocation.service';
 import { RedisService } from '../redis/redis.service';
 import { MailService } from '../mail/mail.service';
-import { generateTotpCode, generateTotpSecret } from './totp.util';
+import { generateTotpCode, generateTotpSecret } from './utils/totp.util';
 
 /** Minimal in-memory Redis stand-in used for unit tests */
 class FakeRedis {
@@ -170,6 +174,10 @@ describe('AuthService', () => {
       imports: [JwtModule.register({ secret: 'test-secret' })],
       providers: [
         AuthService,
+        TokenService,
+        TwoFactorService,
+        OAuthService,
+        PasswordService,
         { provide: PrismaService, useValue: prisma },
         { provide: TokenRevocationService, useValue: tokenRevocation },
         { provide: RedisService, useValue: redisService },

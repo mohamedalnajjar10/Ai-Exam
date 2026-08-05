@@ -149,6 +149,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
+    let details: string | undefined;
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       const mapped =
@@ -161,33 +162,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
         status = HttpStatus.INTERNAL_SERVER_ERROR;
         message = 'Database error';
       }
-
-      this.logger.error(
-        `${request.method} ${request.url} ${status} - Prisma code: ${exception.code}`,
-      );
+      details = `Prisma code: ${exception.code}`;
     } else if (exception instanceof Prisma.PrismaClientInitializationError) {
       status = DATABASE_UNAVAILABLE.status;
       message = DATABASE_UNAVAILABLE.message;
-      this.logger.error(
-        `${request.method} ${request.url} ${status} - Prisma initialization failed`,
-      );
+      details = 'Prisma initialization failed';
     } else if (exception instanceof Prisma.PrismaClientValidationError) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       message = 'Invalid database query';
-      this.logger.error(
-        `${request.method} ${request.url} ${status} - Prisma validation error`,
-        exception.stack,
-      );
+      details = 'Prisma validation error';
     } else if (
       exception instanceof Prisma.PrismaClientRustPanicError ||
       exception instanceof Prisma.PrismaClientUnknownRequestError
     ) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       message = 'Database error';
-      this.logger.error(
-        `${request.method} ${request.url} ${status} - Prisma client error`,
-        exception.stack,
-      );
+      details = 'Prisma client error';
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
@@ -197,16 +187,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const body = res as Record<string, unknown>;
         message = (body.message as string | string[]) ?? message;
       }
+      details = JSON.stringify(message);
+    }
 
+    const logMessage = `${request.method} ${request.url} ${status}${
+      details ? ` - ${details}` : ''
+    }`;
+
+    // Client errors (4xx) are expected outcomes and are logged as warnings.
+    // Only genuine server failures (5xx) deserve error-level logs with stacks.
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `${request.method} ${request.url} ${status} - ${JSON.stringify(message)}`,
+        logMessage,
         exception instanceof Error ? exception.stack : undefined,
       );
     } else {
-      this.logger.error(
-        `${request.method} ${request.url} ${status}`,
-        exception instanceof Error ? exception.stack : undefined,
-      );
+      this.logger.warn(logMessage);
     }
 
     response.status(status).json({
