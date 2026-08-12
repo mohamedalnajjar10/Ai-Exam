@@ -1,16 +1,15 @@
 {
     "version": 2,
-    "buildCommand": "npm run vercel-build",
-    "installCommand": "npm install && npx prisma generate",
-    "functions": {
-        "api/**/*.ts": {
-            "maxDuration": 60
-        }
-    },
-    "rewrites": [
+    "builds": [
         {
-            "source": "/(.*)",
-            "destination": "api/index.ts"
+            "src": "dist/main.js",
+            "use": "@vercel/node"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "dist/main.js"
         }
     ]
 }

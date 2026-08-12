@@ -6,10 +6,11 @@ import express from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common';
 
-const server = express();
-
-export const createApp = async () => {
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+async function createApp() {
+  const app = await NestFactory.create(
+    AppModule,
+    new ExpressAdapter(express()),
+  );
 
   app.setGlobalPrefix('api/v1');
 
@@ -46,27 +47,37 @@ export const createApp = async () => {
 
   SwaggerModule.setup('api-docs', app, document, {
     customCssUrl: [
-      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui.css',
+      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui.css',
     ],
     customJs: [
-      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js',
-      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js',
+      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui-bundle.js',
+      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui-standalone-preset.js',
     ],
   });
 
   await app.init();
-  return server;
-};
+  return app;
+}
 
+/* ========== التشغيل المحلي ========== */
 async function bootstrap() {
   const app = await createApp();
   await app.listen(process.env.PORT ?? 8087);
-  console.log('Application started on port', process.env.PORT ?? 8087);
+  console.log('Application started');
 }
 
-// هذا السطر مهم جدًا لـ Vercel - شغّل فقط خارج بيئته
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// يعمل محليًا فقط (node dist/main.js) ولا يعمل على Vercel
+if (require.main === module) {
   bootstrap();
 }
 
-export default createApp();
+/* ========== التشغيل على Vercel ========== */
+let server: any;
+
+export default async function handler(req: any, res: any) {
+  if (!server) {
+    const app = await createApp();
+    server = app.getHttpAdapter().getInstance(); // نسخة express
+  }
+  server(req, res);
+}
