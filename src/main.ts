@@ -1,22 +1,23 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+const server = express();
 
-  // API prefix
+export const createApp = async () => {
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+
   app.setGlobalPrefix('api/v1');
 
-  // CORS
   app.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
   });
 
-  // Validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -25,49 +26,47 @@ async function bootstrap() {
     }),
   );
 
-  // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Swagger
   const config = new DocumentBuilder()
     .setTitle('Exam Prep AI Assistant')
     .setDescription('API documentation for the Exam Prep AI Assistant')
-    .setVersion('1.1')
-    .addServer(
-      process.env.BACKEND_URL || 'http://localhost:8087',
-      'API Server',
-    )
+    .setVersion('1.0')
     .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        in: 'header',
-      },
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
       'access-token',
     )
     .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        in: 'header',
-      },
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
       'refresh-token',
     )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
 
-  SwaggerModule.setup('api-docs', app, document);
+  SwaggerModule.setup('api-docs', app, document, {
+    customCssUrl: [
+      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui.css',
+    ],
+    customJs: [
+      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js',
+      'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js',
+    ],
+  });
 
-  // IMPORTANT for Render
-  const port = process.env.PORT || 8087;
+  await app.init();
+  return server;
+};
 
-  await app.listen(port, '0.0.0.0');
-
-  console.log(`API running on port ${port}`);
-  console.log(`Swagger: /api-docs`);
+async function bootstrap() {
+  const app = await createApp();
+  await app.listen(process.env.PORT ?? 8087);
+  console.log('Application started on port', process.env.PORT ?? 8087);
 }
 
-bootstrap();
+// هذا السطر مهم جدًا لـ Vercel - شغّل فقط خارج بيئته
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  bootstrap();
+}
+
+export default createApp();
