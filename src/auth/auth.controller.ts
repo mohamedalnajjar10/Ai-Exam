@@ -28,10 +28,11 @@ import { VerifyRecoveryCodeDto } from './dto/verify-recovery-code.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ThrottleGuard } from '../common/guards/throttle.guard';
 import { Throttle } from '../common/decorators/throttle.decorator';
 import { CurrentUser, Public, AccessToken } from '../common';
-import { resetPasswordPage, verificationResultPage } from './utils/pages';
+import { resetPasswordPage } from './utils/pages';
 import { getFrontendUrl } from './utils/app-urls.util';
 
 /**
@@ -60,45 +61,36 @@ export class AuthController {
   }
 
   /**
-   * Verifies the email address using the token from the emailed link.
-   * Renders a result page when opened in a browser.
+   * Verifies the email address using the code from the email
    */
   @Public()
-  @Get('verify-email')
+  @UseGuards(ThrottleGuard)
+  @Throttle({ limit: 5, windowMs: 60_000 })
+  @Post('verify-email')
   @ApiOperation({
-    summary: 'Verify an email address using the emailed verification link',
+    summary: 'Verify an email address using the emailed verification code',
   })
-  @ApiResponse({ status: 200, description: 'Email verified (HTML page)' })
-  @ApiResponse({ status: 401, description: 'Invalid or expired link' })
-  async verifyEmail(
-    @Query('token') token: string,
-    @Res() res: Response,
-  ): Promise<void> {
-    try {
-      const result = await this.authService.verifyEmail(token);
-      res
-        .status(HttpStatus.OK)
-        .setHeader('Content-Type', 'text/html')
-        .send(verificationResultPage(result.message, true));
-    } catch (error: any) {
-      const message =
-        error?.message ?? 'Verification failed. Please request a new link.';
-      res
-        .status(error?.status ?? HttpStatus.BAD_REQUEST)
-        .setHeader('Content-Type', 'text/html')
-        .send(verificationResultPage(message, false));
-    }
+  @ApiResponse({ status: 200, description: 'Email verified' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired code' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @HttpCode(HttpStatus.OK)
+  verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(
+      verifyEmailDto.email,
+      verifyEmailDto.code,
+    );
   }
 
   /**
-   * Sends a fresh verification link to the given email
+   * Sends a fresh verification code to the given email
    */
   @Public()
   @UseGuards(ThrottleGuard)
   @Throttle({ limit: 3, windowMs: 10 * 60_000 })
   @Post('resend-verification')
-  @ApiOperation({ summary: 'Resend the email verification link' })
-  @ApiResponse({ status: 200, description: 'Verification link sent' })
+  @ApiOperation({ summary: 'Resend the email verification code' })
+  @ApiResponse({ status: 200, description: 'Verification code sent' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiResponse({ status: 429, description: 'Too many requests' })
   @HttpCode(HttpStatus.OK)

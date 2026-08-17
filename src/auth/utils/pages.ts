@@ -1,7 +1,7 @@
 /**
  * Minimal server-rendered HTML pages used by the authentication flows.
- * These let the reset-password and email-verification links work without
- * any separate frontend application.
+ * These let the reset-password link work without any separate frontend
+ * application.
  */
 
 const PAGE_STYLES = `
@@ -20,30 +20,6 @@ const PAGE_STYLES = `
   .msg.success{display:block;background:#052e16;border:1px solid #14532d;color:#86efac}
   .msg.info{display:block;background:#172554;border:1px solid #1e40af;color:#93c5fd}
 `;
-
-/** Page shown after clicking the email verification link */
-export function verificationResultPage(
-  message: string,
-  success: boolean,
-): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Email Verification - AI Exam</title>
-<style>${PAGE_STYLES}</style>
-</head>
-<body>
-<div class="card">
-  <h1>${success ? 'Email verified' : 'Verification failed'}</h1>
-  <p class="msg ${success ? 'success' : 'error'}">${escapeHtml(message)}</p>
-  ${success ? '<p>You can now log in with your email and password.</p>' : '<p>Please check the link and try again, or request a new verification email.</p>'}
-  <a href="/api-docs" style="color:#3b82f6;font-size:14px;text-decoration:none">Back to AI Exam</a>
-</div>
-</body>
-</html>`;
-}
 
 /** Password reset form that submits to the reset-password API */
 export function resetPasswordPage(): string {
@@ -139,13 +115,4 @@ export function resetPasswordPage(): string {
 </script>
 </body>
 </html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

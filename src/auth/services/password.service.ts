@@ -63,7 +63,10 @@ export class PasswordService {
 
       await this.mailService.sendPasswordResetEmail(user.email, resetLink);
 
-      return { message: 'Password reset link sent to your email', resetLink };
+      return {
+        message: 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني',
+        resetLink,
+      };
     } else {
       // Equalize response timing so the response does not reveal
       // whether the email is registered
@@ -71,7 +74,9 @@ export class PasswordService {
     }
 
     // Always return the same message to prevent user enumeration
-    return { message: 'Password reset link sent to your email' };
+    return {
+      message: 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني',
+    };
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
@@ -84,7 +89,7 @@ export class PasswordService {
     });
     if (!user || user.email !== payload.email) {
       throw new UnauthorizedException(
-        'Invalid reset link. Please request a new one.',
+        'رابط إعادة الضبط غير صالح. يرجى طلب رابط جديد.',
       );
     }
 
@@ -93,7 +98,7 @@ export class PasswordService {
       (await bcrypt.compare(resetPasswordDto.newPassword, user.passwordHash));
     if (samePassword) {
       throw new BadRequestException(
-        'New password must be different from the current password',
+        'يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور الحالية',
       );
     }
 
@@ -114,7 +119,7 @@ export class PasswordService {
 
     await this.tokenService.revokeToken(resetPasswordDto.token);
 
-    return { message: 'Password has been reset successfully' };
+    return { message: 'تم إعادة تعيين كلمة المرور بنجاح' };
   }
 
   private async resolvePasswordResetToken(
@@ -125,17 +130,17 @@ export class PasswordService {
       payload = await this.jwtService.verifyAsync<TokenPayload>(resetToken);
     } catch {
       throw new UnauthorizedException(
-        'This reset link has expired. Please request a new one.',
+        'انتهت صلاحية رابط إعادة التعيين. يرجى طلب رابط جديد.',
       );
     }
     if (payload.type !== 'password-reset') {
       throw new UnauthorizedException(
-        'Invalid reset link. Please request a new one.',
+        'رابط إعادة الضبط غير صالح. يرجى طلب رابط جديد.',
       );
     }
     if (await this.tokenRevocationService.isRevoked(resetToken)) {
       throw new UnauthorizedException(
-        'This reset link has already been used. Please request a new one.',
+        'هذا رابط إعادة التعيين تم استخدامه بالفعل. يرجى طلب رابط جديد.',
       );
     }
     // The link is only valid if it was the most recently issued one
@@ -145,7 +150,7 @@ export class PasswordService {
       );
       if (storedNonce !== payload.prn) {
         throw new UnauthorizedException(
-          'This reset link is no longer valid. Please request a new one.',
+          'هذا رابط إعادة التعيين لم يعد ساريًا. يرجى طلب رابط جديد.',
         );
       }
     }

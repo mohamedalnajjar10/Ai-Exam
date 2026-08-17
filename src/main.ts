@@ -59,25 +59,22 @@ async function createApp() {
   return app;
 }
 
-/* ========== التشغيل المحلي ========== */
 async function bootstrap() {
   const app = await createApp();
   await app.listen(process.env.PORT ?? 8087);
   console.log('Application started');
 }
 
-// يعمل محليًا فقط (node dist/main.js) ولا يعمل على Vercel
 if (require.main === module) {
   bootstrap();
 }
 
-/* ========== التشغيل على Vercel ========== */
 let server: any;
 
 export default async function handler(req: any, res: any) {
   if (!server) {
     const app = await createApp();
-    server = app.getHttpAdapter().getInstance(); // نسخة express
+    server = app.getHttpAdapter().getInstance();
   }
   server(req, res);
 }

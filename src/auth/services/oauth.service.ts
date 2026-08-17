@@ -88,7 +88,7 @@ export class OAuthService {
     const stored = await this.redisService.get(`oauth-state:${state}`);
     if (!stored) {
       throw new UnauthorizedException(
-        'Invalid OAuth state. Please start the login again.',
+        'حالة OAuth غير صالحة. يرجى إعادة عملية تسجيل الدخول.',
       );
     }
     await this.redisService.del(`oauth-state:${state}`);
@@ -112,9 +112,7 @@ export class OAuthService {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.access_token) {
-      throw new UnauthorizedException(
-        'Google could not exchange the authorization code',
-      );
+      throw new UnauthorizedException('لم تتمكن Google من استبدال رمز التفويض');
     }
     return data;
   }
@@ -128,9 +126,7 @@ export class OAuthService {
 
     const profile = await response.json().catch(() => null);
     if (!response.ok || !profile?.id || !profile?.email) {
-      throw new UnauthorizedException(
-        'Google could not provide the user profile',
-      );
+      throw new UnauthorizedException('لم تتمكن Google من تقديم ملف المستخدم');
     }
     return profile as GoogleOAuthProfile;
   }
@@ -211,7 +207,7 @@ export class OAuthService {
 
     if (!clientId || !clientSecret) {
       throw new InternalServerErrorException(
-        'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
+        'إعدادات OAuth الخاصة بـ Google غير مكتملة. يرجى الاتصال بمسؤول النظام.',
       );
     }
     return { clientId, clientSecret, redirectUri };

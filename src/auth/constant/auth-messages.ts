@@ -1,8 +1,8 @@
 import * as bcrypt from 'bcryptjs';
 
 export const SESSION_EXPIRED_MESSAGE =
-  'Your session has expired. Please log in again';
-export const AUTH_REQUIRED_MESSAGE = 'Authentication required';
+  'انتهت صلاحية جلستك. يرجى تسجيل الدخول مرة أخرى';
+export const AUTH_REQUIRED_MESSAGE = 'يلزم إثبات الهوية للوصول إلى هذا المورد';
 
 export const BCRYPT_SALT_ROUNDS = 10;
 export const ACCESS_TOKEN_EXPIRES_IN = '1h';
@@ -10,8 +10,8 @@ export const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = '7d';
 export const TWO_FACTOR_LOGIN_TOKEN_EXPIRES_IN = '5m';
 export const PASSWORD_RESET_TOKEN_EXPIRES_IN = '15m';
 export const PASSWORD_RESET_TOKEN_TTL_SECONDS = 15 * 60;
-export const EMAIL_VERIFICATION_TOKEN_EXPIRES_IN = '24h';
-export const EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+export const EMAIL_VERIFICATION_CODE_TTL_SECONDS = 15 * 60;
+export const EMAIL_VERIFICATION_MAX_ATTEMPTS = 5;
 export const OAUTH_STATE_TTL_SECONDS = 10 * 60;
 export const TOTP_ISSUER = 'AI Exam';
 export const RECOVERY_CODE_COUNT = 10;

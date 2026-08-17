@@ -355,7 +355,9 @@ describe('Auth registration (e2e)', () => {
       });
 
       const storedToken = await prisma.refreshToken.findUnique({
-        where: { tokenHash: createHash('sha256').update(refreshToken).digest('hex') },
+        where: {
+          tokenHash: createHash('sha256').update(refreshToken).digest('hex'),
+        },
       });
       expect(storedToken).not.toBeNull();
       expect(storedToken?.revokedAt).not.toBeNull();
@@ -383,9 +385,7 @@ describe('Auth registration (e2e)', () => {
 
       const messages = toMessages(response.body as ErrorBody);
       expect(
-        messages.some(
-          (m) => /session/i.test(m) && /log in again/i.test(m),
-        ),
+        messages.some((m) => /session/i.test(m) && /log in again/i.test(m)),
       ).toBe(true);
     });
 
@@ -415,9 +415,7 @@ describe('Auth registration (e2e)', () => {
 
       const messages = toMessages(response.body as ErrorBody);
       expect(
-        messages.some(
-          (m) => /session/i.test(m) && /log in again/i.test(m),
-        ),
+        messages.some((m) => /session/i.test(m) && /log in again/i.test(m)),
       ).toBe(true);
     });
 
@@ -520,7 +518,9 @@ describe('Auth registration (e2e)', () => {
         .expect(401);
 
       const storedToken = await prisma.refreshToken.findUnique({
-        where: { tokenHash: createHash('sha256').update(refreshToken).digest('hex') },
+        where: {
+          tokenHash: createHash('sha256').update(refreshToken).digest('hex'),
+        },
       });
       expect(storedToken).not.toBeNull();
       expect(storedToken?.revokedAt).not.toBeNull();
@@ -535,9 +535,7 @@ describe('Auth registration (e2e)', () => {
         .expect(200);
 
       const messages = toMessages(response.body as ErrorBody);
-      expect(
-        messages.some((m) => /reset link sent/i.test(m)),
-      ).toBe(true);
+      expect(messages.some((m) => /reset link sent/i.test(m))).toBe(true);
     });
   });
 
@@ -566,8 +564,7 @@ describe('Auth registration (e2e)', () => {
       const messages = toMessages(response.body as ErrorBody);
       expect(
         messages.some(
-          (m) =>
-            /expired/i.test(m) && /request a new one/i.test(m),
+          (m) => /expired/i.test(m) && /request a new one/i.test(m),
         ),
       ).toBe(true);
 

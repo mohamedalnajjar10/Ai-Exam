@@ -30,9 +30,7 @@ describe('TokenRevocationService', () => {
 
   beforeEach(() => {
     const redisMock = createRedisMock();
-    service = new TokenRevocationService(
-      redisMock as unknown as RedisService,
-    );
+    service = new TokenRevocationService(redisMock as unknown as RedisService);
   });
 
   it('marks a token as revoked', async () => {

@@ -10,7 +10,7 @@ export class SubjectService {
       where: { id: branchId },
     });
     if (!branch) {
-      throw new NotFoundException('Branch not found');
+      throw new NotFoundException('الشعبة غير موجودة');
     }
 
     return this.prisma.subject.findMany({
@@ -26,7 +26,7 @@ export class SubjectService {
     });
 
     if (!user || !user.branchId) {
-      throw new NotFoundException('User has no branch selected');
+      throw new NotFoundException('المستخدم لم يحدد شعبة');
     }
 
     return this.getByBranch(user.branchId);

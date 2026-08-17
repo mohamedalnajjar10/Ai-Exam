@@ -15,75 +15,78 @@ const PRISMA_CLIENT_ERRORS: Record<
 > = {
   P2000: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Value is too long for the field',
+    message: 'القيمة طويلة جداً لهذا الحقل',
   },
-  P2001: { status: HttpStatus.NOT_FOUND, message: 'Record does not exist' },
+  P2001: { status: HttpStatus.NOT_FOUND, message: 'السجل غير موجود' },
   P2002: {
     status: HttpStatus.CONFLICT,
-    message: 'A record with this value already exists',
+    message: 'يوجد سجل بهذه القيمة بالفعل',
   },
   P2003: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Referenced record does not exist',
+    message: 'السجل المرتبط غير موجود',
   },
   P2004: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Constraint validation failed',
+    message: 'فشل التحقق من القيود',
   },
   P2005: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Invalid value stored in the database',
+    message: 'قيمة غير صالحة مخزنة في قاعدة البيانات',
   },
   P2006: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Invalid value for the field',
+    message: 'قيمة غير صالحة للحقل',
   },
-  P2007: { status: HttpStatus.BAD_REQUEST, message: 'Data validation error' },
+  P2007: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'خطأ في التحقق من البيانات',
+  },
   P2008: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Failed to parse the query',
+    message: 'فشل في تحليل الاستعلام',
   },
   P2009: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Failed to validate the query',
+    message: 'فشل في التحقق من الاستعلام',
   },
   P2011: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'A required field is missing',
+    message: 'حقل مطلوب مفقود',
   },
   P2012: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'A required value is missing',
+    message: 'قيمة مطلوبة مفقودة',
   },
   P2013: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'A required argument is missing',
+    message: 'وسيط مطلوب مفقود',
   },
-  P2014: { status: HttpStatus.BAD_REQUEST, message: 'Relation violation' },
+  P2014: { status: HttpStatus.BAD_REQUEST, message: 'انتهاك في العلاقة' },
   P2015: {
     status: HttpStatus.NOT_FOUND,
-    message: 'Referenced record does not exist',
+    message: 'السجل المرتبط غير موجود',
   },
   P2016: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Unable to interpret the query',
+    message: 'تعذر تفسير الاستعلام',
   },
   P2017: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Related records are not connected',
+    message: 'السجلات المرتبطة غير متصلة',
   },
   P2018: {
     status: HttpStatus.NOT_FOUND,
-    message: 'Required connected records were not found',
+    message: 'لم يتم العثور على السجلات المرتبطة المطلوبة',
   },
   P2020: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Value out of range for the field',
+    message: 'القيمة خارج النطاق المسموح للحقل',
   },
-  P2025: { status: HttpStatus.NOT_FOUND, message: 'Record not found' },
+  P2025: { status: HttpStatus.NOT_FOUND, message: 'السجل غير موجود' },
   P2034: {
     status: HttpStatus.CONFLICT,
-    message: 'Transaction conflict, please retry',
+    message: 'تعارض في المعاملة، يرجى إعادة المحاولة',
   },
 };
 
@@ -93,49 +96,49 @@ const PRISMA_SERVER_ERRORS: Record<
 > = {
   P2010: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database query failed',
+    message: 'فشل استعلام قاعدة البيانات',
   },
   P2021: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database table does not exist',
+    message: 'جدول قاعدة البيانات غير موجود',
   },
   P2022: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database column does not exist',
+    message: 'عمود قاعدة البيانات غير موجود',
   },
   P2023: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database index does not exist',
+    message: 'فهرس قاعدة البيانات غير موجود',
   },
   P2024: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database constraint does not exist',
+    message: 'قيد قاعدة البيانات غير موجود',
   },
   P2026: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database engine is not supported',
+    message: 'محرك قاعدة البيانات غير مدعوم',
   },
   P2027: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Multiple database errors occurred',
+    message: 'حدثت أخطاء متعددة في قاعدة البيانات',
   },
   P2028: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database transaction error',
+    message: 'خطأ في معاملة قاعدة البيانات',
   },
   P2030: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Full-text search is not available',
+    message: 'البحث النصي الكامل غير متاح',
   },
   P2033: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    message: 'Database number overflow',
+    message: 'تجاوز في الأرقام بقاعدة البيانات',
   },
 };
 
 const DATABASE_UNAVAILABLE = {
   status: HttpStatus.SERVICE_UNAVAILABLE,
-  message: 'Database is unavailable',
+  message: 'قاعدة البيانات غير متاحة',
 };
 
 @Catch()
@@ -148,7 +151,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | string[] = 'Internal server error';
+    let message: string | string[] = 'خطأ في الخادم الداخلي';
     let details: string | undefined;
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
@@ -160,24 +163,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = mapped.message;
       } else {
         status = HttpStatus.INTERNAL_SERVER_ERROR;
-        message = 'Database error';
+        message = 'خطأ في قاعدة البيانات';
       }
-      details = `Prisma code: ${exception.code}`;
+      details = `كود Prisma: ${exception.code}`;
     } else if (exception instanceof Prisma.PrismaClientInitializationError) {
       status = DATABASE_UNAVAILABLE.status;
       message = DATABASE_UNAVAILABLE.message;
-      details = 'Prisma initialization failed';
+      details = 'فشل تهيئة Prisma';
     } else if (exception instanceof Prisma.PrismaClientValidationError) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-      message = 'Invalid database query';
-      details = 'Prisma validation error';
+      message = 'استعلام قاعدة بيانات غير صالح';
+      details = 'خطأ في التحقق من Prisma';
     } else if (
       exception instanceof Prisma.PrismaClientRustPanicError ||
       exception instanceof Prisma.PrismaClientUnknownRequestError
     ) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-      message = 'Database error';
-      details = 'Prisma client error';
+      message = 'خطأ في قاعدة البيانات';
+      details = 'خطأ في عميل Prisma';
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();

@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
+import { randomInt, createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenRevocationService } from './token-revocation.service';
 import { RedisService } from '../../redis/redis.service';
@@ -27,11 +27,10 @@ import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import {
   BCRYPT_SALT_ROUNDS,
-  EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
+  EMAIL_VERIFICATION_CODE_TTL_SECONDS,
+  EMAIL_VERIFICATION_MAX_ATTEMPTS,
   DUMMY_PASSWORD_HASH,
 } from '../constant/auth-messages';
-import { getBackendUrl } from '../utils/app-urls.util';
-import type { TokenPayload } from '../interfaces/auth.interfaces';
 
 /**
  * Core authentication flows: account registration, email verification,
@@ -58,7 +57,7 @@ export class AuthService {
       where: { email: registerDto.email },
     });
     if (existing) {
-      throw new ConflictException('Email is already registered');
+      throw new ConflictException('البريد الإلكتروني مسجل بالفعل');
     }
 
     const passwordHash = await bcrypt.hash(
@@ -78,27 +77,45 @@ export class AuthService {
 
     return {
       message:
-        'Account created successfully. Please verify your email before logging in.',
+        'تم إنشاء الحساب بنجاح. تم إرسال رمز التحقق إلى بريدك الإلكتروني قبل تسجيل الدخول.',
     };
   }
 
   /**
-   * Marks a user's email as verified using the token from the emailed link.
+   * Marks a user's email as verified using the code from the email.
    */
-  async verifyEmail(token: string) {
-    const payload = await this.resolveEmailVerificationToken(token);
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
-    if (!user || user.email !== payload.email) {
+  async verifyEmail(email: string, code: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
       throw new UnauthorizedException(
-        'Invalid verification link. Please request a new one.',
+        'رمز التحقق غير صالح. يرجى طلب رمز جديد.',
       );
     }
 
     if (user.emailVerified) {
-      return { message: 'Your email is already verified' };
+      return { message: 'تم التحقق من بريدك الإلكتروني بالفعل' };
+    }
+
+    const attempts = await this.redisService.incrWithExpiry(
+      this.emailVerificationAttemptsKey(user.id),
+      EMAIL_VERIFICATION_CODE_TTL_SECONDS,
+    );
+    if (attempts > EMAIL_VERIFICATION_MAX_ATTEMPTS) {
+      throw new UnauthorizedException(
+        'لقد استنفدت محاولات التحقق. يرجى طلب رمز جديد.',
+      );
+    }
+
+    const storedCode = await this.redisService.get(
+      this.emailVerificationKey(user.id),
+    );
+    if (!storedCode) {
+      throw new UnauthorizedException(
+        'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.',
+      );
+    }
+    if (!codesMatch(storedCode, code)) {
+      throw new UnauthorizedException('رمز التحقق غير صحيح');
     }
 
     await this.prisma.user.update({
@@ -106,14 +123,14 @@ export class AuthService {
       data: { emailVerified: true },
     });
 
-    await this.tokenService.revokeToken(token);
     await this.redisService.del(this.emailVerificationKey(user.id));
+    await this.redisService.del(this.emailVerificationAttemptsKey(user.id));
 
-    return { message: 'Your email has been verified successfully' };
+    return { message: 'تم التحقق من بريدك الإلكتروني بنجاح' };
   }
 
   /**
-   * Sends a fresh verification link to the user's email. Always returns the
+   * Sends a fresh verification code to the user's email. Always returns the
    * same message so the response does not reveal whether the email exists.
    */
   async resendVerification(email: string) {
@@ -125,7 +142,7 @@ export class AuthService {
       await bcrypt.compare(email, DUMMY_PASSWORD_HASH);
     }
 
-    return { message: 'Verification link sent to your email' };
+    return { message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني' };
   }
 
   async login(loginDto: LoginDto) {
@@ -136,11 +153,15 @@ export class AuthService {
       // Perform a dummy bcrypt comparison so response time does not reveal
       // whether the email is registered.
       await bcrypt.compare(loginDto.password, DUMMY_PASSWORD_HASH);
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(
+        'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+      );
     }
 
     if (!user.passwordHash) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(
+        'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+      );
     }
 
     const passwordValid = await bcrypt.compare(
@@ -148,12 +169,14 @@ export class AuthService {
       user.passwordHash,
     );
     if (!passwordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(
+        'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+      );
     }
 
     if (!user.emailVerified) {
       throw new ForbiddenException(
-        'Please verify your email address before logging in',
+        'يرجى التحقق من بريدك الإلكتروني قبل تسجيل الدخول',
       );
     }
 
@@ -180,7 +203,7 @@ export class AuthService {
     if (decoded?.sub) {
       await this.tokenService.revokeAllRefreshTokens(decoded.sub);
     }
-    return { message: 'Logged out successfully' };
+    return { message: 'تم تسجيل الخروج بنجاح' };
   }
 
   async getProfile(userId: string) {
@@ -240,69 +263,37 @@ export class AuthService {
     return this.oauthService.handleGoogleOAuthCallback(code, state);
   }
 
-  private async resolveEmailVerificationToken(
-    token: string,
-  ): Promise<TokenPayload> {
-    let payload: TokenPayload;
-    try {
-      payload = await this.jwtService.verifyAsync<TokenPayload>(token);
-    } catch {
-      throw new UnauthorizedException(
-        'This verification link has expired. Please request a new one.',
-      );
-    }
-    if (payload.type !== 'email-verification') {
-      throw new UnauthorizedException(
-        'Invalid verification link. Please request a new one.',
-      );
-    }
-    if (await this.tokenRevocationService.isRevoked(token)) {
-      throw new UnauthorizedException(
-        'This verification link has already been used. Please request a new one.',
-      );
-    }
-    // The link is only valid if it was the most recently issued one
-    if (payload.prn) {
-      const storedNonce = await this.redisService.get(
-        this.emailVerificationKey(payload.sub),
-      );
-      if (storedNonce !== payload.prn) {
-        throw new UnauthorizedException(
-          'This verification link is no longer valid. Please request a new one.',
-        );
-      }
-    }
-    return payload;
-  }
-
   /**
-   * Issues a fresh verification link (invalidating any previously sent ones)
+   * Issues a fresh verification code (invalidating any previously sent ones)
    * and emails it to the user.
    */
   private async sendEmailVerification(
     userId: string,
     email: string,
   ): Promise<void> {
-    const nonce = randomUUID();
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     await this.redisService.set(
       this.emailVerificationKey(userId),
-      nonce,
-      EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
+      code,
+      EMAIL_VERIFICATION_CODE_TTL_SECONDS,
     );
+    await this.redisService.del(this.emailVerificationAttemptsKey(userId));
 
-    const verifyToken = await this.tokenService.signEmailVerificationToken(
-      userId,
-      email,
-      nonce,
-    );
-    const verifyLink = `${getBackendUrl(
-      this.configService,
-    )}/api/v1/auth/verify-email?token=${verifyToken}`;
-
-    await this.mailService.sendVerificationEmail(email, verifyLink);
+    await this.mailService.sendVerificationEmail(email, code);
   }
 
   private emailVerificationKey(userId: string): string {
     return `email-verification:${userId}`;
   }
+
+  private emailVerificationAttemptsKey(userId: string): string {
+    return `email-verification:attempts:${userId}`;
+  }
+}
+
+/** Constant-time comparison of two verification codes */
+function codesMatch(a: string, b: string): boolean {
+  const aHash = createHash('sha256').update(String(a)).digest();
+  const bHash = createHash('sha256').update(String(b)).digest();
+  return timingSafeEqual(aHash, bHash);
 }

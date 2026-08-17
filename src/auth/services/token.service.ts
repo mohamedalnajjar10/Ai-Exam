@@ -7,7 +7,6 @@ import { TokenRevocationService } from './token-revocation.service';
 import {
   ACCESS_TOKEN_EXPIRES_IN,
   DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
-  EMAIL_VERIFICATION_TOKEN_EXPIRES_IN,
   PASSWORD_RESET_TOKEN_EXPIRES_IN,
   TWO_FACTOR_LOGIN_TOKEN_EXPIRES_IN,
 } from '../constant/auth-messages';
@@ -66,18 +65,6 @@ export class TokenService {
     );
   }
 
-  /** One-time email verification link token bound to the latest nonce. */
-  signEmailVerificationToken(
-    userId: string,
-    email: string,
-    nonce: string,
-  ): Promise<string> {
-    return this.jwtService.signAsync(
-      this.buildPayload(userId, email, 'email-verification', nonce),
-      { expiresIn: EMAIL_VERIFICATION_TOKEN_EXPIRES_IN },
-    );
-  }
-
   /** One-time password reset link token bound to the latest nonce. */
   signPasswordResetToken(
     userId: string,
@@ -118,10 +105,10 @@ export class TokenService {
     try {
       payload = await this.jwtService.verifyAsync<TokenPayload>(refreshToken);
     } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException('رمز التحديث غير صالح أو منتهي الصلاحية');
     }
     if (payload.type !== 'refresh') {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('رمز التحديث غير صالح أو منتهي الصلاحية');
     }
 
     const tokenHash = this.hashToken(refreshToken);
@@ -129,7 +116,7 @@ export class TokenService {
       where: { tokenHash },
     });
     if (!record || record.expiresAt < new Date()) {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException('رمز التحديث غير صالح أو منتهي الصلاحية');
     }
     if (record.revokedAt) {
       // Reuse of a rotated token is a sign of theft: revoke the whole family
@@ -137,7 +124,7 @@ export class TokenService {
         where: { userId: record.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException('رمز التحديث غير صالح أو منتهي الصلاحية');
     }
 
     // Rotate: revoke the current refresh token and issue a new pair

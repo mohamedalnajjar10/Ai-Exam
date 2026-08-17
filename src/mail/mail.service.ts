@@ -44,7 +44,7 @@ export class MailService implements OnModuleInit {
 
     if (nodeEnv === 'test') {
       this.useMock = true;
-      this.logger.log('Using mock mailer (test environment)');
+      this.logger.log('استخدام مرسل بريد وهمي (بيئة الاختبار)');
       return;
     }
 
@@ -52,12 +52,12 @@ export class MailService implements OnModuleInit {
       this.useMock = true;
       if (nodeEnv === 'production') {
         this.logger.error(
-          'EMAIL_HOST/EMAIL_USER/EMAIL_PASSWORD are not configured. ' +
-            'Emails will NOT be delivered in production!',
+          'لم يتم تكوين EMAIL_HOST/EMAIL_USER/EMAIL_PASSWORD. ' +
+            'لن يتم تسليم رسائل البريد الإلكتروني في بيئة الإنتاج!',
         );
       } else {
         this.logger.warn(
-          'SMTP is not fully configured - emails will only be logged to the console',
+          'لم يتم تكوين SMTP بالكامل - سيتم تسجيل رسائل البريد الإلكتروني في وحدة التحكم فقط',
         );
       }
       return;
@@ -73,20 +73,20 @@ export class MailService implements OnModuleInit {
       },
     });
     this.logger.log(
-      `SMTP transporter ready (${smtpHost}:${smtpPort}) - emails will be delivered`,
+      `مُهيئ SMTP جاهز (${smtpHost}:${smtpPort}) - سيتم تسليم رسائل البريد الإلكتروني`,
     );
   }
 
-  async sendVerificationEmail(to: string, verifyLink: string): Promise<void> {
+  async sendVerificationEmail(to: string, code: string): Promise<void> {
     await this.send({
       to,
-      subject: 'AI Exam - Verify your email address',
+      subject: 'AI Exam - رمز التحقق من بريدك الإلكتروني',
       html: `
-        <h2>Verify your email address</h2>
-        <p>Welcome to AI Exam! Please confirm your email address to activate your account.</p>
-        <p>This link is valid for 24 hours.</p>
-        <p><a href="${verifyLink}">Verify my email</a></p>
-        <p>If you did not create this account, you can safely ignore this email.</p>
+        <h2>تحقق من بريدك الإلكتروني</h2>
+        <p>مرحباً بك في AI Exam! استخدم رمز التحقق التالي لتفعيل حسابك:</p>
+        <p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p>
+        <p>هذا الرمز صالح لمدة 15 دقيقة.</p>
+        <p>إذا لم تكن أنشأت هذا الحساب، يمكنك تجاهل هذا البريد الإلكتروني بأمان.</p>
       `,
     });
   }
@@ -94,12 +94,12 @@ export class MailService implements OnModuleInit {
   async sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
     await this.send({
       to,
-      subject: 'AI Exam - Password Reset',
+      subject: 'AI Exam - إعادة تعيين كلمة المرور',
       html: `
-        <h2>Reset your password</h2>
-        <p>You requested to reset your password. This link is valid for 15 minutes.</p>
-        <p><a href="${resetLink}">Reset my password</a></p>
-        <p>If you did not request this, you can safely ignore this email.</p>
+        <h2>إعادة تعيين كلمة المرور</h2>
+        <p>لقد طلبت إعادة تعيين كلمة المرور الخاصة بك. هذا الرابط صالح لمدة 15 دقيقة.</p>
+        <p><a href="${resetLink}">إعادة تعيين كلمة المرور</a></p>
+        <p>إذا لم تكن طلبت ذلك، يمكنك تجاهل هذا البريد الإلكتروني بأمان.</p>
       `,
     });
   }
@@ -124,10 +124,12 @@ export class MailService implements OnModuleInit {
       'noreply@aiexam.app';
     try {
       await this.transporter.sendMail({ ...message, from });
-      this.logger.log(`Email sent to ${message.to} (${message.subject})`);
+      this.logger.log(
+        `تم إرسال البريد الإلكتروني إلى ${message.to} (${message.subject})`,
+      );
     } catch (error: any) {
       this.logger.error(
-        `Failed to send email to ${message.to} (${message.subject}): ${
+        `فشل إرسال البريد الإلكتروني إلى ${message.to} (${message.subject}): ${
           error?.message ?? error
         }`,
       );

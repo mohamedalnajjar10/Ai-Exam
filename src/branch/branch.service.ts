@@ -21,7 +21,7 @@ function throwIfNotfound(
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === 'P2025'
   ) {
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('المستخدم غير موجود');
     if (!user.branchId) throw new BadRequestException(selectMessage);
     throw new BadRequestException(changeMessage);
   }
@@ -37,7 +37,7 @@ export class BranchService {
       where: { name },
     });
     if (existing) {
-      throw new ConflictException('Branch with this name already exists');
+      throw new ConflictException('شعبة بهذا الاسم موجودة بالفعل');
     }
 
     return this.prisma.branch.create({
@@ -63,7 +63,7 @@ export class BranchService {
       include: { subjects: { orderBy: { name: 'asc' } } },
     });
     if (!branch) {
-      throw new NotFoundException('Branch not found');
+      throw new NotFoundException('الشعبة غير موجودة');
     }
     return branch;
   }
@@ -73,7 +73,7 @@ export class BranchService {
       where: { id: branchId },
     });
     if (!branch) {
-      throw new NotFoundException('Branch not found');
+      throw new NotFoundException('الشعبة غير موجودة');
     }
 
     try {
@@ -89,8 +89,8 @@ export class BranchService {
       throwIfNotfound(
         error,
         user,
-        'Branch already selected. Use change endpoint instead.',
-        'Branch already selected. Use change endpoint instead.',
+        'تم اختيار الشعبة بالفعل. استخدم نقطة التغيير بدلاً من ذلك.',
+        'تم اختيار الشعبة بالفعل. استخدم نقطة التغيير بدلاً من ذلك.',
       );
     }
   }
@@ -100,7 +100,7 @@ export class BranchService {
       where: { id: branchId },
     });
     if (!branch) {
-      throw new NotFoundException('Branch not found');
+      throw new NotFoundException('الشعبة غير موجودة');
     }
 
     try {
@@ -116,8 +116,8 @@ export class BranchService {
       throwIfNotfound(
         error,
         user,
-        'No branch selected. Use select endpoint instead.',
-        'Already assigned to this branch',
+        'لم يتم اختيار أي شعبة. استخدم نقطة الاختيار بدلاً من ذلك.',
+        'أنت منضم إلى هذه الشعبة بالفعل',
       );
     }
   }

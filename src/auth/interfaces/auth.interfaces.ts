@@ -2,14 +2,9 @@
 export interface TokenPayload {
   sub: string;
   email: string;
-  type:
-    | 'access'
-    | 'refresh'
-    | 'two-factor-login'
-    | 'password-reset'
-    | 'email-verification';
+  type: 'access' | 'refresh' | 'two-factor-login' | 'password-reset';
   jti: string;
-  /** Password reset nonce - ties a reset link to the latest reset request */
+  /** Nonce - ties a link token to the latest reset/verification request */
   prn?: string;
 }
 

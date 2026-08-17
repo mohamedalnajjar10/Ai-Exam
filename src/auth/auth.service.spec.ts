@@ -24,6 +24,7 @@ import { generateTotpCode, generateTotpSecret } from './utils/totp.util';
 /** Minimal in-memory Redis stand-in used for unit tests */
 class FakeRedis {
   private store = new Map<string, { value: string; expiresAt: number }>();
+  private counters = new Map<string, { count: number; expiresAt: number }>();
 
   async set(
     key: string,
@@ -51,6 +52,19 @@ class FakeRedis {
   async del(key: string): Promise<number> {
     return this.store.delete(key) ? 1 : 0;
   }
+
+  async incrWithExpiry(key: string, ttlSeconds: number): Promise<number> {
+    const entry = this.counters.get(key);
+    if (!entry || (entry.expiresAt !== 0 && Date.now() > entry.expiresAt)) {
+      this.counters.set(key, {
+        count: 1,
+        expiresAt: Date.now() + ttlSeconds * 1000,
+      });
+      return 1;
+    }
+    entry.count++;
+    return entry.count;
+  }
 }
 
 describe('AuthService', () => {
@@ -76,7 +90,7 @@ describe('AuthService', () => {
   };
   let configService: { get: jest.Mock };
   let fakeRedis: FakeRedis;
-  let redisService: { getClient: jest.Mock };
+  let redisService: { getClient: jest.Mock; incrWithExpiry: jest.Mock };
 
   const validDto = {
     name: 'Ahmed Ali',
@@ -163,6 +177,9 @@ describe('AuthService', () => {
       ),
       get: jest.fn((key: string) => fakeRedis.get(key)),
       del: jest.fn((key: string) => fakeRedis.del(key)),
+      incrWithExpiry: jest.fn((key: string, ttlSeconds: number) =>
+        fakeRedis.incrWithExpiry(key, ttlSeconds),
+      ),
       getClient: jest.fn(() => fakeRedis),
     };
     configService = {
@@ -202,14 +219,14 @@ describe('AuthService', () => {
 
       const result: any = await service.register(validDto);
 
-      expect(result.message).toContain('verify');
+      expect(result.message).toContain('رمز التحقق');
       expect(result.accessToken).toBeUndefined();
       expect(result.refreshToken).toBeUndefined();
       expect(result.user).toBeUndefined();
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
 
-    it('emails a verification link after creating the account', async () => {
+    it('emails a verification code after creating the account', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockImplementation(async ({ data }) => ({
         id: 'user-1',
@@ -224,21 +241,10 @@ describe('AuthService', () => {
 
       expect(mailService.sendVerificationEmail).toHaveBeenCalledWith(
         validDto.email,
-        expect.stringContaining('token='),
+        expect.stringMatching(/^\d{6}$/),
       );
-      const verifyLink: string =
-        mailService.sendVerificationEmail.mock.calls[0][1];
-      expect(
-        verifyLink.startsWith('http://localhost:8087/api/v1/auth/verify-email'),
-      ).toBe(true);
-      const token = new URL(verifyLink).searchParams.get('token') as string;
-      const decoded: any = service['jwtService'].decode(token);
-      expect(decoded.sub).toBe('user-1');
-      expect(decoded.type).toBe('email-verification');
-      expect(decoded.prn).toBeDefined();
-      expect(await fakeRedis.get('email-verification:user-1')).toBe(
-        decoded.prn,
-      );
+      const code: string = mailService.sendVerificationEmail.mock.calls[0][1];
+      expect(await fakeRedis.get('email-verification:user-1')).toBe(code);
     });
 
     it('stores the password hashed (never plaintext)', async () => {
@@ -434,7 +440,7 @@ describe('AuthService', () => {
 
       const result = await service.logout(loginResult.accessToken);
 
-      expect(result.message).toBe('Logged out successfully');
+      expect(result.message).toBe('تم تسجيل الخروج بنجاح');
       expect(tokenRevocation.revoke).toHaveBeenCalledWith(
         loginResult.accessToken,
         expect.any(Number),
@@ -823,7 +829,9 @@ describe('AuthService', () => {
 
       const result = await service.forgotPassword({ email: validDto.email });
 
-      expect(result.message).toBe('Password reset link sent to your email');
+      expect(result.message).toBe(
+        'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني',
+      );
       expect(mailService.sendPasswordResetEmail).toHaveBeenCalledWith(
         validDto.email,
         expect.stringContaining('token='),
@@ -861,7 +869,9 @@ describe('AuthService', () => {
         email: 'nobody@example.com',
       });
 
-      expect(result.message).toBe('Password reset link sent to your email');
+      expect(result.message).toBe(
+        'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني',
+      );
       expect(mailService.sendPasswordResetEmail).not.toHaveBeenCalled();
     });
   });
@@ -892,7 +902,7 @@ describe('AuthService', () => {
 
       const result = await service.resetPassword({ token, newPassword });
 
-      expect(result.message).toBe('Password has been reset successfully');
+      expect(result.message).toBe('تم إعادة تعيين كلمة المرور بنجاح');
 
       const updateData = prisma.user.update.mock.calls[0][0].data;
       expect(updateData.passwordHash).not.toBe(newPassword);
@@ -948,7 +958,7 @@ describe('AuthService', () => {
       await expect(
         service.resetPassword({ token, newPassword }),
       ).rejects.toThrow(
-        'This reset link is no longer valid. Please request a new one.',
+        'هذا رابط إعادة التعيين لم يعد ساريًا. يرجى طلب رابط جديد.',
       );
     });
 
@@ -965,9 +975,7 @@ describe('AuthService', () => {
 
       await expect(
         service.resetPassword({ token, newPassword }),
-      ).rejects.toThrow(
-        'This reset link has expired. Please request a new one.',
-      );
+      ).rejects.toThrow('انتهت صلاحية رابط إعادة التعيين. يرجى طلب رابط جديد.');
     });
 
     it('rejects a token that is not a reset token', async () => {
@@ -978,7 +986,7 @@ describe('AuthService', () => {
 
       await expect(
         service.resetPassword({ token, newPassword }),
-      ).rejects.toThrow('Invalid reset link. Please request a new one.');
+      ).rejects.toThrow('رابط إعادة الضبط غير صالح. يرجى طلب رابط جديد.');
     });
 
     it('rejects a reset link that was already used', async () => {
@@ -988,112 +996,100 @@ describe('AuthService', () => {
       await expect(
         service.resetPassword({ token, newPassword }),
       ).rejects.toThrow(
-        'This reset link has already been used. Please request a new one.',
+        'هذا رابط إعادة التعيين تم استخدامه بالفعل. يرجى طلب رابط جديد.',
       );
     });
   });
 
   describe('verifyEmail', () => {
-    const getValidToken = () =>
-      service['jwtService'].signAsync(
-        {
-          sub: 'user-1',
-          email: validDto.email,
-          type: 'email-verification',
-          jti: 'verify-1',
-          prn: 'current-nonce',
-        },
-        { expiresIn: '24h' },
-      );
+    const seedValidCode = (code = '123456') =>
+      fakeRedis.set('email-verification:user-1', code);
 
-    const seedValidNonce = () =>
-      fakeRedis.set('email-verification:user-1', 'current-nonce');
-
-    it('marks the email as verified and revokes the link', async () => {
-      const token = await getValidToken();
-      await seedValidNonce();
+    it('marks the email as verified when the code matches', async () => {
+      await seedValidCode();
       prisma.user.findUnique.mockResolvedValue(makeUser());
       prisma.user.update.mockResolvedValue(makeUser({ emailVerified: true }));
 
-      const result = await service.verifyEmail(token);
+      const result = await service.verifyEmail(validDto.email, '123456');
 
-      expect(result.message).toBe('Your email has been verified successfully');
+      expect(result.message).toBe('تم التحقق من بريدك الإلكتروني بنجاح');
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { emailVerified: true },
       });
-      expect(tokenRevocation.revoke).toHaveBeenCalledWith(
-        token,
-        expect.any(Number),
-      );
       expect(await fakeRedis.get('email-verification:user-1')).toBeNull();
+      expect(
+        await fakeRedis.get('email-verification:attempts:user-1'),
+      ).toBeNull();
     });
 
     it('reports success when the email is already verified', async () => {
-      const token = await getValidToken();
-      await seedValidNonce();
+      await seedValidCode();
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ emailVerified: true }),
       );
 
-      const result = await service.verifyEmail(token);
+      const result = await service.verifyEmail(validDto.email, '123456');
 
-      expect(result.message).toBe('Your email is already verified');
+      expect(result.message).toBe('تم التحقق من بريدك الإلكتروني بالفعل');
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('rejects an expired verification link', async () => {
-      const token = await service['jwtService'].signAsync(
-        {
-          sub: 'user-1',
-          email: validDto.email,
-          type: 'email-verification',
-          jti: 'verify-1',
-        },
-        { expiresIn: 0 },
-      );
+    it('rejects an unknown email', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.verifyEmail(token)).rejects.toThrow(
-        'This verification link has expired. Please request a new one.',
-      );
+      await expect(
+        service.verifyEmail('nobody@example.com', '123456'),
+      ).rejects.toThrow('رمز التحقق غير صالح. يرجى طلب رمز جديد.');
     });
 
-    it('rejects a token that is not a verification token', async () => {
-      const token = await service['jwtService'].signAsync(
-        { sub: 'user-1', email: validDto.email, type: 'access', jti: 'x' },
-        { expiresIn: '24h' },
-      );
-
-      await expect(service.verifyEmail(token)).rejects.toThrow(
-        'Invalid verification link. Please request a new one.',
-      );
-    });
-
-    it('rejects a link that is not the latest one issued', async () => {
-      const token = await getValidToken();
+    it('rejects a wrong code', async () => {
+      await seedValidCode();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      await fakeRedis.set('email-verification:user-1', 'stale-nonce');
 
-      await expect(service.verifyEmail(token)).rejects.toThrow(
-        'This verification link is no longer valid. Please request a new one.',
-      );
+      await expect(
+        service.verifyEmail(validDto.email, '000000'),
+      ).rejects.toThrow('رمز التحقق غير صحيح');
+    });
+
+    it('rejects a code that was never issued (expired)', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser());
+
+      await expect(
+        service.verifyEmail(validDto.email, '123456'),
+      ).rejects.toThrow('انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.');
+    });
+
+    it('locks out after too many failed attempts', async () => {
+      await seedValidCode();
+      prisma.user.findUnique.mockResolvedValue(makeUser());
+
+      for (let i = 0; i < 5; i++) {
+        await expect(
+          service.verifyEmail(validDto.email, '000000'),
+        ).rejects.toThrow('رمز التحقق غير صحيح');
+      }
+      await expect(
+        service.verifyEmail(validDto.email, '123456'),
+      ).rejects.toThrow('لقد استنفدت محاولات التحقق. يرجى طلب رمز جديد.');
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
   describe('resendVerification', () => {
-    it('sends a fresh verification link for an unverified account', async () => {
+    it('sends a fresh verification code for an unverified account', async () => {
       prisma.user.findUnique.mockResolvedValue(makeUser());
 
       const result = await service.resendVerification(validDto.email);
 
-      expect(result.message).toBe('Verification link sent to your email');
+      expect(result.message).toBe('تم إرسال رمز التحقق إلى بريدك الإلكتروني');
       expect(mailService.sendVerificationEmail).toHaveBeenCalledWith(
         validDto.email,
-        expect.stringContaining('token='),
+        expect.stringMatching(/^\d{6}$/),
       );
     });
 
-    it('does not send a link for an already verified account', async () => {
+    it('does not send a code for an already verified account', async () => {
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ emailVerified: true }),
       );
@@ -1108,7 +1104,7 @@ describe('AuthService', () => {
 
       const result = await service.resendVerification('nobody@example.com');
 
-      expect(result.message).toBe('Verification link sent to your email');
+      expect(result.message).toBe('تم إرسال رمز التحقق إلى بريدك الإلكتروني');
       expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
     });
   });
@@ -1137,7 +1133,7 @@ describe('AuthService', () => {
       );
 
       await expect(service.getGoogleOAuthUrl()).rejects.toThrow(
-        'Google OAuth is not configured',
+        'إعدادات OAuth الخاصة بـ Google غير مكتملة. يرجى الاتصال بمسؤول النظام.',
       );
     });
   });

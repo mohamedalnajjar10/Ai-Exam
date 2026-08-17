@@ -77,32 +77,15 @@ describe('AuthController', () => {
   });
 
   describe('verifyEmail', () => {
-    it('renders a success page when verification succeeds', async () => {
-      const res = mockRes();
-      mockAuthService.verifyEmail.mockResolvedValue({
-        message: 'Your email has been verified successfully',
-      });
+    it('should delegate to AuthService.verifyEmail with email and code', async () => {
+      const dto = { email: 'ahmed@example.com', code: '483920' };
+      const result = { message: 'تم التحقق من بريدك الإلكتروني بنجاح' };
+      mockAuthService.verifyEmail.mockResolvedValue(result);
 
-      await controller.verifyEmail('valid-token', res);
-
-      expect(mockAuthService.verifyEmail).toHaveBeenCalledWith('valid-token');
-      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html');
-    });
-
-    it('renders an error page when verification fails', async () => {
-      const res = mockRes();
-      mockAuthService.verifyEmail.mockRejectedValue(
-        new Error(
-          'This verification link has expired. Please request a new one.',
-        ),
-      );
-
-      await controller.verifyEmail('expired-token', res);
-
-      expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
-      expect(res.send).toHaveBeenCalledWith(
-        expect.stringContaining('Verification failed'),
+      await expect(controller.verifyEmail(dto)).resolves.toEqual(result);
+      expect(mockAuthService.verifyEmail).toHaveBeenCalledWith(
+        dto.email,
+        dto.code,
       );
     });
   });
